@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto"
 import { existsSync, readFileSync, realpathSync } from "node:fs"
+import { userInfo } from "node:os"
 import { join } from "node:path"
 import type { HarnessName, ProfileIdentity } from "./model"
 import { canonicalDirectory } from "./paths"
@@ -62,8 +63,7 @@ async function readClaudeKeychain(directory: string): Promise<string | undefined
   const canonicalHome = realpathSync(canonicalDirectory("claude"))
   const suffix = createHash("sha256").update(canonical).digest("hex").slice(0, 8)
   const service = canonical === canonicalHome ? "Claude Code-credentials" : `Claude Code-credentials-${suffix}`
-  const user = process.env.USER
-  if (!user) throw new Error("USER is required to read Claude credentials")
+  const user = userInfo().username
 
   const child = Bun.spawn([
     "/usr/bin/security",

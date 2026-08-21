@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test"
 import { mkdtempSync, mkdirSync, rmSync } from "node:fs"
-import { tmpdir } from "node:os"
+import { tmpdir, userInfo } from "node:os"
 import { join } from "node:path"
 import { ClaudeHarness, CodexHarness } from "../src/harness"
 import { Profile } from "../src/model"
@@ -52,7 +52,6 @@ describe("ClaudeHarness", () => {
       "ANTHROPIC_CUSTOM_HEADERS",
       "ANTHROPIC_UNIX_SOCKET",
       "AWS_BEARER_TOKEN_BEDROCK",
-      "AWS_ENDPOINT_URL_BEDROCK",
       "CLAUDE_BG_AUTH_SNAPSHOT_PATH",
       "CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR",
       "CLAUDE_CODE_CUSTOM_OAUTH_URL",
@@ -63,28 +62,42 @@ describe("ClaudeHarness", () => {
       "CLAUDE_CODE_SDK_HAS_HOST_AUTH_REFRESH",
       "CLAUDE_CODE_SDK_HAS_OAUTH_REFRESH",
       "CLAUDE_SECURESTORAGE_CONFIG_DIR",
+    ] as const
+    const toolCredentials = [
+      "AWS_ACCESS_KEY_ID",
+      "AWS_ENDPOINT_URL_S3",
+      "AWS_SECRET_ACCESS_KEY",
+      "AWS_SESSION_TOKEN",
       "CLOUDSDK_AUTH_ACCESS_TOKEN",
-      "GCE_METADATA_HOST",
-      "METADATA_SERVER_DETECTION",
+      "GOOGLE_APPLICATION_CREDENTIALS",
     ] as const
     const bypassEnvironment = Object.fromEntries(provenBypasses.map((key) => [key, process.env[key]]))
+    const toolEnvironment = Object.fromEntries(toolCredentials.map((key) => [key, process.env[key]]))
+    const ambientUser = process.env.USER
     process.env.ANTHROPIC_CONFIG_DIR = "/wrong/global-anthropic-config"
+    process.env.USER = "wrong-ambient-user"
     for (const key of provenBypasses) process.env[key] = "wrong-ambient-auth"
+    for (const key of toolCredentials) process.env[key] = "ambient-tool-credential"
     try {
       const profile = new Profile("claude", "work", "/tmp/work")
       const environment = harness.environment(profile)
       expect(environment.CLAUDE_CONFIG_DIR).toBe(profile.directory)
       expect(environment.ANTHROPIC_CONFIG_DIR).toBe("/tmp/work/.anthropic")
+      expect(environment.USER).toBe(userInfo().username)
       for (const key of provenBypasses) expect(environment[key]).toBeUndefined()
+      for (const key of toolCredentials) expect(environment[key]).toBe("ambient-tool-credential")
       for (const key of harness.authenticationEnvironmentKeys) expect(environment[key]).toBeUndefined()
       for (const prefix of harness.authenticationEnvironmentPrefixes) {
         expect(Object.keys(environment).some((key) => key.startsWith(prefix))).toBeFalse()
       }
     } finally {
-      restoreEnvironment(original)
       restoreEnvironment(bypassEnvironment)
+      restoreEnvironment(original)
+      restoreEnvironment(toolEnvironment)
       if (anthropicConfig === undefined) delete process.env.ANTHROPIC_CONFIG_DIR
       else process.env.ANTHROPIC_CONFIG_DIR = anthropicConfig
+      if (ambientUser === undefined) delete process.env.USER
+      else process.env.USER = ambientUser
     }
   })
 })

@@ -1,4 +1,5 @@
 import { existsSync, mkdirSync, readdirSync, statSync, symlinkSync } from "node:fs"
+import { userInfo } from "node:os"
 import { join } from "node:path"
 import { readAccessCredential } from "./auth"
 import { Profile, type HarnessName } from "./model"
@@ -58,6 +59,7 @@ export abstract class Harness {
     for (const key of Object.keys(environment)) {
       if (this.authenticationEnvironmentPrefixes.some((prefix) => key.startsWith(prefix))) delete environment[key]
     }
+    environment.USER = userInfo().username
     environment[this.configEnvironmentKey] = profile.directory
     Object.assign(environment, this.additionalEnvironment(profile))
     return environment
@@ -107,24 +109,7 @@ export class ClaudeHarness extends Harness {
     "ANTHROPIC_SERVICE_ACCOUNT_ID",
     "ANTHROPIC_UNIX_SOCKET",
     "ANTHROPIC_WORKSPACE_ID",
-    "AWS_ACCESS_KEY_ID",
     "AWS_BEARER_TOKEN_BEDROCK",
-    "AWS_CONFIG_FILE",
-    "AWS_CONTAINER_AUTHORIZATION_TOKEN",
-    "AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE",
-    "AWS_CONTAINER_CREDENTIALS_FULL_URI",
-    "AWS_CONTAINER_CREDENTIALS_RELATIVE_URI",
-    "AWS_DEFAULT_REGION",
-    "AWS_EC2_METADATA_SERVICE_ENDPOINT",
-    "AWS_EC2_METADATA_SERVICE_ENDPOINT_MODE",
-    "AWS_PROFILE",
-    "AWS_REGION",
-    "AWS_ROLE_ARN",
-    "AWS_ROLE_SESSION_NAME",
-    "AWS_SECRET_ACCESS_KEY",
-    "AWS_SESSION_TOKEN",
-    "AWS_SHARED_CREDENTIALS_FILE",
-    "AWS_WEB_IDENTITY_TOKEN_FILE",
     "CLAUDE_CODE_HOST_AUTH_ENV_VAR",
     "CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR",
     "CLAUDE_CODE_HOST_CREDS_FILE",
@@ -149,14 +134,6 @@ export class ClaudeHarness extends Harness {
     "CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR",
     "CLAUDE_BG_AUTH_SNAPSHOT_PATH",
     "CLAUDE_SECURESTORAGE_CONFIG_DIR",
-    "CLOUD_ML_REGION",
-    "GCLOUD_PROJECT",
-    "GCE_METADATA_HOST",
-    "GCE_METADATA_IP",
-    "GOOGLE_APPLICATION_CREDENTIALS",
-    "GOOGLE_CLOUD_PROJECT",
-    "GOOGLE_CLOUD_QUOTA_PROJECT",
-    "METADATA_SERVER_DETECTION",
     "CLAUDE_CODE_SESSION_ACCESS_TOKEN",
     "CLAUDE_CODE_WEBSOCKET_AUTH_FILE_DESCRIPTOR",
     "CLAUDE_SESSION_INGRESS_TOKEN_FILE",
@@ -169,7 +146,6 @@ export class ClaudeHarness extends Harness {
     "ANTHROPIC_FOUNDRY_",
     "ANTHROPIC_GOOGLE_CLOUD_",
     "ANTHROPIC_VERTEX_",
-    "AWS_ENDPOINT_URL",
     "CLAUDE_BG_AUTH_",
     "CLAUDE_CODE_API_KEY_",
     "CLAUDE_CODE_CUSTOM_OAUTH_",
@@ -179,7 +155,6 @@ export class ClaudeHarness extends Harness {
     "CLAUDE_CODE_SKIP_",
     "CLAUDE_CODE_USE_",
     "CLAUDE_SECURESTORAGE_",
-    "CLOUDSDK_AUTH_",
   ] as const
 
   signInArguments(): string[] {
