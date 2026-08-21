@@ -1,0 +1,44 @@
+#!/bin/sh
+set -eu
+
+platform=${1:?platform is required}
+version=${2:?version is required}
+output=${3:-.}
+native_package="node_modules/@opentui/core-${platform}"
+archive="agemux-${platform}.tar.gz"
+
+test -d dist
+test -d "$native_package"
+test -s LICENSE
+test -s THIRD_PARTY_NOTICES
+test "$(bun ./dist/main.js --version)" = "$version"
+test -z "$(find dist -type f \( -name '*.wasm' -o -name '*.scm' \) -print -quit)"
+
+temporary=$(mktemp -d "${TMPDIR:-/tmp}/agemux-package.XXXXXX")
+trap 'rm -rf "$temporary"' EXIT HUP INT TERM
+
+mkdir -p "$temporary/package/agemux/node_modules/@opentui" "$output"
+cp -R dist/. "$temporary/package/agemux/"
+cp -R "$native_package" "$temporary/package/agemux/node_modules/@opentui/"
+cp LICENSE THIRD_PARTY_NOTICES "$temporary/package/agemux/"
+printf '%s\n' "$version" > "$temporary/package/agemux/VERSION"
+tar -C "$temporary/package" -czf "$output/$archive" agemux
+
+listing="$temporary/archive-contents"
+tar -tzf "$output/$archive" > "$listing"
+grep -qx 'agemux/LICENSE' "$listing"
+grep -qx 'agemux/THIRD_PARTY_NOTICES' "$listing"
+grep -qx 'agemux/VERSION' "$listing"
+grep -qx 'agemux/main.js' "$listing"
+if grep -Eq '\.(wasm|scm)$' "$listing"; then
+  echo "agemux: release archive contains unused parser assets" >&2
+  exit 1
+fi
+
+mkdir "$temporary/verify"
+tar -xzf "$output/$archive" -C "$temporary/verify"
+(
+  cd "$temporary/verify/agemux"
+  test "$(env NODE_PATH='' bun ./main.js --version)" = "$version"
+  env NODE_PATH='' bun ./main.js --help >/dev/null
+)

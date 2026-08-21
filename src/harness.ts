@@ -1,4 +1,5 @@
 import { existsSync, mkdirSync, readdirSync, statSync, symlinkSync } from "node:fs"
+import { userInfo } from "node:os"
 import { join } from "node:path"
 import { readAccessCredential } from "./auth"
 import { Profile, type HarnessName } from "./model"
@@ -11,6 +12,7 @@ export abstract class Harness {
   abstract readonly executable: string
   abstract readonly configEnvironmentKey: "CLAUDE_CONFIG_DIR" | "CODEX_HOME"
   abstract readonly authenticationEnvironmentKeys: readonly string[]
+  readonly authenticationEnvironmentPrefixes: readonly string[] = []
   abstract signInArguments(): string[]
   abstract launchArguments(arguments_: string[]): string[]
 
@@ -54,6 +56,10 @@ export abstract class Harness {
       Object.entries(process.env).filter((entry): entry is [string, string] => entry[1] !== undefined),
     )
     for (const key of this.authenticationEnvironmentKeys) delete environment[key]
+    for (const key of Object.keys(environment)) {
+      if (this.authenticationEnvironmentPrefixes.some((prefix) => key.startsWith(prefix))) delete environment[key]
+    }
+    environment.USER = userInfo().username
     environment[this.configEnvironmentKey] = profile.directory
     Object.assign(environment, this.additionalEnvironment(profile))
     return environment
@@ -77,20 +83,46 @@ export class ClaudeHarness extends Harness {
   readonly configEnvironmentKey = "CLAUDE_CONFIG_DIR" as const
   readonly authenticationEnvironmentKeys = [
     "ANTHROPIC_API_KEY",
+    "ANTHROPIC_AWS_API_KEY",
+    "ANTHROPIC_AWS_BASE_URL",
+    "ANTHROPIC_AWS_WORKSPACE_ID",
     "ANTHROPIC_AUTH_TOKEN",
     "ANTHROPIC_BASE_URL",
     "ANTHROPIC_BEDROCK_BASE_URL",
+    "ANTHROPIC_BEDROCK_MANTLE_BASE_URL",
+    "ANTHROPIC_CUSTOM_HEADERS",
     "ANTHROPIC_FOUNDRY_API_KEY",
     "ANTHROPIC_FOUNDRY_AUTH_TOKEN",
     "ANTHROPIC_FOUNDRY_BASE_URL",
+    "ANTHROPIC_FOUNDRY_RESOURCE",
+    "ANTHROPIC_GOOGLE_CLOUD_BASE_URL",
+    "ANTHROPIC_GOOGLE_CLOUD_LOCATION",
+    "ANTHROPIC_GOOGLE_CLOUD_PROJECT",
+    "ANTHROPIC_GOOGLE_CLOUD_WORKSPACE_ID",
     "ANTHROPIC_VERTEX_BASE_URL",
+    "ANTHROPIC_VERTEX_PROJECT_ID",
     "ANTHROPIC_FEDERATION_RULE_ID",
     "ANTHROPIC_IDENTITY_TOKEN",
     "ANTHROPIC_IDENTITY_TOKEN_FILE",
     "ANTHROPIC_ORGANIZATION_ID",
     "ANTHROPIC_PROFILE",
     "ANTHROPIC_SERVICE_ACCOUNT_ID",
+    "ANTHROPIC_UNIX_SOCKET",
     "ANTHROPIC_WORKSPACE_ID",
+    "AWS_BEARER_TOKEN_BEDROCK",
+    "CLAUDE_CODE_HOST_AUTH_ENV_VAR",
+    "CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR",
+    "CLAUDE_CODE_HOST_CREDS_FILE",
+    "CLAUDE_CODE_OAUTH_REFRESH_TOKEN",
+    "CLAUDE_CODE_OAUTH_SCOPES",
+    "CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST",
+    "CLAUDE_CODE_SDK_HAS_HOST_AUTH_REFRESH",
+    "CLAUDE_CODE_SKIP_ANTHROPIC_AWS_AUTH",
+    "CLAUDE_CODE_SKIP_ANTHROPIC_GOOGLE_CLOUD_AUTH",
+    "CLAUDE_CODE_SKIP_BEDROCK_AUTH",
+    "CLAUDE_CODE_SKIP_FOUNDRY_AUTH",
+    "CLAUDE_CODE_SKIP_MANTLE_AUTH",
+    "CLAUDE_CODE_SKIP_VERTEX_AUTH",
     "CLAUDE_CODE_USE_ANTHROPIC_AWS",
     "CLAUDE_CODE_USE_ANTHROPIC_GOOGLE_CLOUD",
     "CLAUDE_CODE_USE_BEDROCK",
@@ -99,6 +131,30 @@ export class ClaudeHarness extends Harness {
     "CLAUDE_CODE_USE_MANTLE",
     "CLAUDE_CODE_USE_VERTEX",
     "CLAUDE_CODE_OAUTH_TOKEN",
+    "CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR",
+    "CLAUDE_BG_AUTH_SNAPSHOT_PATH",
+    "CLAUDE_SECURESTORAGE_CONFIG_DIR",
+    "CLAUDE_CODE_SESSION_ACCESS_TOKEN",
+    "CLAUDE_CODE_WEBSOCKET_AUTH_FILE_DESCRIPTOR",
+    "CLAUDE_SESSION_INGRESS_TOKEN_FILE",
+    "CLAUDE_TRUSTED_DEVICE_TOKEN",
+    "_CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL",
+  ] as const
+  readonly authenticationEnvironmentPrefixes = [
+    "ANTHROPIC_AWS_",
+    "ANTHROPIC_BEDROCK_",
+    "ANTHROPIC_FOUNDRY_",
+    "ANTHROPIC_GOOGLE_CLOUD_",
+    "ANTHROPIC_VERTEX_",
+    "CLAUDE_BG_AUTH_",
+    "CLAUDE_CODE_API_KEY_",
+    "CLAUDE_CODE_CUSTOM_OAUTH_",
+    "CLAUDE_CODE_HOST_",
+    "CLAUDE_CODE_OAUTH_",
+    "CLAUDE_CODE_SDK_HAS_",
+    "CLAUDE_CODE_SKIP_",
+    "CLAUDE_CODE_USE_",
+    "CLAUDE_SECURESTORAGE_",
   ] as const
 
   signInArguments(): string[] {

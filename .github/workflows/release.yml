@@ -23,8 +23,8 @@ jobs:
             platform: linux-x64
     runs-on: ${{ matrix.runner }}
     steps:
-      - uses: actions/checkout@v7
-      - uses: oven-sh/setup-bun@v2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version: 1.3.14
       - run: bun install --frozen-lockfile
@@ -32,16 +32,18 @@ jobs:
       - run: bun test
       - run: bun run typecheck
       - run: bun run build
-      - name: Execute release binary
+      - name: Execute release application
         run: |
-          test "$(./dist/agemux --version)" = "${GITHUB_REF_NAME#v}"
-          ./dist/agemux --help
-      - name: Package release binary
+          test "$(bun ./dist/main.js --version)" = "${GITHUB_REF_NAME#v}"
+          bun ./dist/main.js --help
+      - name: Package release application
+        run: script/package "${{ matrix.platform }}" "${GITHUB_REF_NAME#v}"
+      - name: Exercise packaged picker
         run: |
-          mkdir package
-          cp dist/agemux package/agemux
-          tar -C package -czf "agemux-${{ matrix.platform }}.tar.gz" agemux
-      - uses: actions/upload-artifact@v4
+          package_root=$(mktemp -d)
+          tar -xzf "agemux-${{ matrix.platform }}.tar.gz" -C "$package_root"
+          AGEMUX_TEST_ENTRYPOINT="$package_root/agemux/main.js" bun test test/picker.test.ts
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: agemux-${{ matrix.platform }}
           path: agemux-${{ matrix.platform }}.tar.gz
@@ -53,8 +55,8 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           pattern: agemux-*
           path: release-assets
@@ -66,10 +68,42 @@ jobs:
           cp script/install release-assets/agemux-install
           chmod 0755 release-assets/agemux-install
           cd release-assets
-          sha256sum agemux-*.tar.gz > checksums.txt
-          gh release create "$GITHUB_REF_NAME" \
+          set -- agemux-*.tar.gz
+          test "$#" -eq 4
+          for archive in "$@"; do
+            listing="$archive.contents"
+            tar -tzf "$archive" > "$listing"
+            grep -qx 'agemux/LICENSE' "$listing"
+            grep -qx 'agemux/THIRD_PARTY_NOTICES' "$listing"
+            grep -qx 'agemux/VERSION' "$listing"
+            grep -qx 'agemux/main.js' "$listing"
+            if grep -Eq '\.(wasm|scm)$' "$listing"; then
+              echo "$archive contains unused parser assets" >&2
+              exit 1
+            fi
+            rm "$listing"
+          done
+          sha256sum agemux-*.tar.gz agemux-install > checksums.txt
+          if release_draft=$(gh release view "$GITHUB_REF_NAME" \
             --repo "$GITHUB_REPOSITORY" \
-            --verify-tag \
-            --title "agemux $GITHUB_REF_NAME" \
-            --generate-notes \
+            --json isDraft \
+            --jq .isDraft 2>/dev/null); then
+            if [ "$release_draft" != true ]; then
+              echo "agemux: $GITHUB_REF_NAME is already published"
+              exit 0
+            fi
+          else
+            gh release create "$GITHUB_REF_NAME" \
+              --repo "$GITHUB_REPOSITORY" \
+              --verify-tag \
+              --draft \
+              --title "agemux $GITHUB_REF_NAME" \
+              --generate-notes
+          fi
+          gh release upload "$GITHUB_REF_NAME" \
+            --repo "$GITHUB_REPOSITORY" \
+            --clobber \
             agemux-*.tar.gz checksums.txt agemux-install
+          gh release edit "$GITHUB_REF_NAME" \
+            --repo "$GITHUB_REPOSITORY" \
+            --draft=false

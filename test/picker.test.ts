@@ -24,7 +24,7 @@ describe("account picker", () => {
 export AGEMUX_HOME=${quote(home)}
 export AGEMUX_CLAUDE_BIN=${quote(claude)}
 export AGEMUX_CODEX_BIN=${quote(codex)}
-exec ${quote(process.execPath)} ${quote(join(import.meta.dir, "..", "src", "main.ts"))} claude
+exec ${quote(process.execPath)} ${quote(entrypoint())} claude
 `)
     chmodSync(runner, 0o755)
 
@@ -39,9 +39,9 @@ exec ${quote(process.execPath)} ${quote(join(import.meta.dir, "..", "src", "main
     if (process.platform !== "darwin") {
       const stdin = child.stdin
       if (!stdin) throw new Error("picker PTY stdin was not created")
-      await Bun.sleep(1_000)
+      await Bun.sleep(2_000)
       stdin.write("\t")
-      await Bun.sleep(1_000)
+      await Bun.sleep(500)
       stdin.write("\r")
       stdin.end()
     }
@@ -50,7 +50,7 @@ exec ${quote(process.execPath)} ${quote(join(import.meta.dir, "..", "src", "main
     if (status !== 0) throw new Error(`picker exited ${status}\n${await stdout}\n${await stderr}`)
     expect(existsSync(launched)).toBeTrue()
     expect(readFileSync(launched, "utf8").trim()).toBe("codex")
-  }, 5_000)
+  }, 8_000)
 
   test("restores the terminal and exits nonzero when profile loading fails", async () => {
     const root = mkdtempSync(join(tmpdir(), "agemux-picker-test-"))
@@ -65,7 +65,7 @@ exec ${quote(process.execPath)} ${quote(join(import.meta.dir, "..", "src", "main
     writeFileSync(runner, `#!/bin/sh
 export AGEMUX_HOME=${quote(invalidHome)}
 export AGEMUX_CLAUDE_BIN=${quote(claude)}
-exec ${quote(process.execPath)} ${quote(join(import.meta.dir, "..", "src", "main.ts"))} claude
+exec ${quote(process.execPath)} ${quote(entrypoint())} claude
 `)
     chmodSync(runner, 0o755)
 
@@ -95,9 +95,12 @@ function ptyCommand(root: string, runner: string): string[] {
   writeFileSync(expectScript, `#!/usr/bin/expect -f
 set timeout 5
 spawn ${runner}
-after 1000
+expect {
+  -re "personal" {}
+  timeout { exit 124 }
+}
 send "\\t"
-after 1000
+after 500
 send "\\r"
 expect {
   eof {}
@@ -127,4 +130,8 @@ exit [lindex $result 3]
 
 function quote(value: string): string {
   return `'${value.replaceAll("'", `'"'"'`)}'`
+}
+
+function entrypoint(): string {
+  return process.env.AGEMUX_TEST_ENTRYPOINT ?? join(import.meta.dir, "..", "src", "main.ts")
 }

@@ -1,15 +1,13 @@
 {
   "name": "agemux",
-  "version": "0.1.0",
+  "version": "0.1.1",
+  "license": "MIT",
   "private": true,
   "type": "module",
   "packageManager": "bun@1.3.14",
-  "bin": {
-    "agemux": "./dist/agemux"
-  },
   "scripts": {
-    "build": "bun build --compile ./src/main.ts --outfile ./dist/agemux",
-    "check": "bun test && bun run typecheck && bun run build && ./dist/agemux --help",
+    "build": "rm -rf ./dist && bun build ./src/main.ts --target=bun --external '@opentui/core-*' --external '*.wasm' --external '*.scm' --outdir ./dist",
+    "check": "bun test && bun run typecheck && bun run build && test -z \"$(find dist -type f \\( -name '*.wasm' -o -name '*.scm' \\) -print -quit)\" && bun ./dist/main.js --help && test \"$(bun ./dist/main.js --version)\" = \"0.1.1\"",
     "test": "bun test",
     "typecheck": "tsc --noEmit"
   },

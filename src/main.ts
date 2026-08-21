@@ -99,10 +99,13 @@ function requireHarness(value: string | undefined): HarnessName {
 
 function setup(shell: string | undefined): void {
   try {
-    const result = setupShell(shell, process.execPath)
+    const executable = process.env.AGEMUX_EXECUTABLE
+    if (!executable) fail("setup must be run through the installed agemux launcher")
+    const result = setupShell(shell, executable)
+    const paths = result.paths.join(", ")
     console.log(result.changed
-      ? `agemux: added shell integration to ${result.path}; open a new shell`
-      : `agemux: shell integration already exists in ${result.path}`)
+      ? `agemux: added shell integration to ${paths}; open a new shell`
+      : `agemux: shell integration already exists in ${paths}`)
   } catch (error) {
     fail(error instanceof Error ? error.message : String(error))
   }
