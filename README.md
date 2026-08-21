@@ -25,10 +25,10 @@ Give this prompt to Codex, Claude Code, or another coding agent:
 Install agemux on this machine. Follow https://github.com/bucket-robotics/agemux/blob/main/SETUP.md exactly. Verify the installed command and shell integration, then tell me what changed.
 ```
 
-The agent needs `curl`, zsh or bash, and an existing Claude or Codex CLI. The
-installer fetches a private, checksum-verified Bun runtime when needed. No
-GitHub account is required. Agemux supports macOS and glibc-based Linux on arm64
-and x64.
+The agent needs `curl`, `unzip`, zsh or bash, and an existing Claude or Codex
+CLI. The installer fetches a private, checksum-verified Bun runtime. No GitHub
+account is required. Agemux supports macOS 13 or newer and glibc 2.17 or newer
+Linux on arm64 and x64. x64 machines need SSE4.2.
 
 `agemux setup` adds a small, marked block to `~/.zshrc` or `~/.bashrc`. It routes
 bare interactive commands through the picker while leaving commands with

@@ -24,7 +24,7 @@ describe("account picker", () => {
 export AGEMUX_HOME=${quote(home)}
 export AGEMUX_CLAUDE_BIN=${quote(claude)}
 export AGEMUX_CODEX_BIN=${quote(codex)}
-exec ${quote(process.execPath)} ${quote(join(import.meta.dir, "..", "src", "main.ts"))} claude
+exec ${quote(process.execPath)} ${quote(entrypoint())} claude
 `)
     chmodSync(runner, 0o755)
 
@@ -65,7 +65,7 @@ exec ${quote(process.execPath)} ${quote(join(import.meta.dir, "..", "src", "main
     writeFileSync(runner, `#!/bin/sh
 export AGEMUX_HOME=${quote(invalidHome)}
 export AGEMUX_CLAUDE_BIN=${quote(claude)}
-exec ${quote(process.execPath)} ${quote(join(import.meta.dir, "..", "src", "main.ts"))} claude
+exec ${quote(process.execPath)} ${quote(entrypoint())} claude
 `)
     chmodSync(runner, 0o755)
 
@@ -130,4 +130,8 @@ exit [lindex $result 3]
 
 function quote(value: string): string {
   return `'${value.replaceAll("'", `'"'"'`)}'`
+}
+
+function entrypoint(): string {
+  return process.env.AGEMUX_TEST_ENTRYPOINT ?? join(import.meta.dir, "..", "src", "main.ts")
 }

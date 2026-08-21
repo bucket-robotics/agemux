@@ -38,6 +38,11 @@ jobs:
           bun ./dist/main.js --help
       - name: Package release application
         run: script/package "${{ matrix.platform }}" "${GITHUB_REF_NAME#v}"
+      - name: Exercise packaged picker
+        run: |
+          package_root=$(mktemp -d)
+          tar -xzf "agemux-${{ matrix.platform }}.tar.gz" -C "$package_root"
+          AGEMUX_TEST_ENTRYPOINT="$package_root/agemux/main.js" bun test test/picker.test.ts
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: agemux-${{ matrix.platform }}
@@ -66,20 +71,38 @@ jobs:
           set -- agemux-*.tar.gz
           test "$#" -eq 4
           for archive in "$@"; do
-            tar -tzf "$archive" | grep -qx 'agemux/LICENSE'
-            tar -tzf "$archive" | grep -qx 'agemux/THIRD_PARTY_NOTICES'
-            tar -tzf "$archive" | grep -qx 'agemux/VERSION'
-            tar -tzf "$archive" | grep -qx 'agemux/main.js'
+            listing="$archive.contents"
+            tar -tzf "$archive" > "$listing"
+            grep -qx 'agemux/LICENSE' "$listing"
+            grep -qx 'agemux/THIRD_PARTY_NOTICES' "$listing"
+            grep -qx 'agemux/VERSION' "$listing"
+            grep -qx 'agemux/main.js' "$listing"
+            if grep -Eq '\.(wasm|scm)$' "$listing"; then
+              echo "$archive contains unused parser assets" >&2
+              exit 1
+            fi
+            rm "$listing"
           done
           sha256sum agemux-*.tar.gz agemux-install > checksums.txt
-          gh release create "$GITHUB_REF_NAME" \
+          if release_draft=$(gh release view "$GITHUB_REF_NAME" \
             --repo "$GITHUB_REPOSITORY" \
-            --verify-tag \
-            --draft \
-            --title "agemux $GITHUB_REF_NAME" \
-            --generate-notes
+            --json isDraft \
+            --jq .isDraft 2>/dev/null); then
+            if [ "$release_draft" != true ]; then
+              echo "agemux: $GITHUB_REF_NAME is already published"
+              exit 0
+            fi
+          else
+            gh release create "$GITHUB_REF_NAME" \
+              --repo "$GITHUB_REPOSITORY" \
+              --verify-tag \
+              --draft \
+              --title "agemux $GITHUB_REF_NAME" \
+              --generate-notes
+          fi
           gh release upload "$GITHUB_REF_NAME" \
             --repo "$GITHUB_REPOSITORY" \
+            --clobber \
             agemux-*.tar.gz checksums.txt agemux-install
           gh release edit "$GITHUB_REF_NAME" \
             --repo "$GITHUB_REPOSITORY" \

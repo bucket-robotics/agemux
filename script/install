@@ -15,6 +15,17 @@ require_command() {
   command -v "$1" >/dev/null 2>&1 || fail "$1 is required"
 }
 
+require_macos_13() {
+  [ "$(uname -s)" = Darwin ] || return 0
+  require_command sw_vers
+  macos_version=$(sw_vers -productVersion)
+  macos_major=${macos_version%%.*}
+  case "$macos_major" in
+    '' | *[!0-9]*) fail "could not determine the macOS version" ;;
+  esac
+  [ "$macos_major" -ge 13 ] || fail "macOS 13 or newer is required"
+}
+
 select_platform() {
   case "$(uname -s):$(uname -m)" in
     Darwin:arm64)
@@ -45,11 +56,37 @@ select_platform() {
   esac
 }
 
-require_glibc_on_linux() {
+require_linux_runtime() {
   [ "$(uname -s)" = Linux ] || return 0
   require_command ldd
   case "$(ldd --version 2>&1 || true)" in
     *musl*) fail "musl Linux is not supported; glibc is required" ;;
+  esac
+  require_command getconf
+  glibc_version=$(getconf GNU_LIBC_VERSION 2>/dev/null | awk '{ print $2 }' || true)
+  glibc_major=${glibc_version%%.*}
+  glibc_minor=${glibc_version#*.}
+  glibc_minor=${glibc_minor%%.*}
+  case "$glibc_major:$glibc_minor" in
+    *[!0-9:]* | :* | *:) fail "could not determine the glibc version" ;;
+  esac
+  if [ "$glibc_major" -lt 2 ] || { [ "$glibc_major" -eq 2 ] && [ "$glibc_minor" -lt 17 ]; }; then
+    fail "glibc 2.17 or newer is required"
+  fi
+}
+
+require_sse42_on_x64() {
+  [ "$(uname -m)" = x86_64 ] || return 0
+  case "$(uname -s)" in
+    Darwin)
+      require_command sysctl
+      sysctl -n machdep.cpu.features 2>/dev/null | grep -Eqi '(^|[[:space:]])SSE4\.2([[:space:]]|$)' ||
+        fail "an x64 CPU with SSE4.2 is required"
+      ;;
+    Linux)
+      grep -Eq '(^|[[:space:]])sse4_2([[:space:]]|$)' /proc/cpuinfo ||
+        fail "an x64 CPU with SSE4.2 is required"
+      ;;
   esac
 }
 
@@ -70,25 +107,32 @@ verify_checksum() {
   [ "$(sha256 "$1")" = "$2" ] || fail "checksum mismatch for $3"
 }
 
-resolve_bun() {
-  if bun_executable=$(command -v bun 2>/dev/null) && [ "$("$bun_executable" --version)" = 1.3.14 ]; then
+install_bun() {
+  bun_runtime="$application_root/runtime/bun-1.3.14-$bun_checksum"
+  bun_executable="$bun_runtime/bun"
+  if [ -d "$bun_runtime" ]; then
+    [ "$(cat "$bun_runtime/ARCHIVE_SHA256" 2>/dev/null || true)" = "$bun_checksum" ] ||
+      fail "the installed Bun runtime is incomplete: $bun_runtime"
+    [ -x "$bun_executable" ] || fail "the installed Bun runtime is incomplete: $bun_runtime"
+    [ -s "$bun_runtime/LICENSE.md" ] || fail "the installed Bun runtime is incomplete: $bun_runtime"
     return
   fi
 
-  require_command unzip
   bun_release=https://github.com/oven-sh/bun/releases/download/bun-v1.3.14
   fetch "$bun_release/$bun_archive" "$temporary/$bun_archive"
   verify_checksum "$temporary/$bun_archive" "$bun_checksum" "$bun_archive"
   unzip -q "$temporary/$bun_archive" -d "$temporary/bun"
 
-  bun_runtime="$application_root/runtime/bun-1.3.14"
-  mkdir -p "$bun_runtime"
-  install -m 0755 "$temporary/bun/$bun_directory/bun" "$bun_runtime/bun"
-
   fetch https://raw.githubusercontent.com/oven-sh/bun/bun-v1.3.14/LICENSE.md "$temporary/BUN_LICENSE.md"
   verify_checksum "$temporary/BUN_LICENSE.md" 2c6160ec8fb853f7e8f97d9b249e756c9b0ac44860a68b6bf4f1b0bcbc5c3741 BUN_LICENSE.md
-  install -m 0644 "$temporary/BUN_LICENSE.md" "$bun_runtime/LICENSE.md"
-  bun_executable="$bun_runtime/bun"
+
+  mkdir -p "$application_root/runtime"
+  staged_runtime=$(mktemp -d "$application_root/runtime/.install.XXXXXX")
+  install -m 0755 "$temporary/bun/$bun_directory/bun" "$staged_runtime/bun"
+  install -m 0644 "$temporary/BUN_LICENSE.md" "$staged_runtime/LICENSE.md"
+  printf '%s\n' "$bun_checksum" > "$staged_runtime/ARCHIVE_SHA256"
+  mv "$staged_runtime" "$bun_runtime"
+  staged_runtime=
 }
 
 select_release() {
@@ -121,23 +165,21 @@ verify_release() {
 install_application() {
   application_directory="$application_root/$version"
   mkdir -p "$application_root"
+
+  if [ -d "$application_directory" ]; then
+    [ "$(cat "$application_directory/ARCHIVE_SHA256" 2>/dev/null || true)" = "$expected" ] ||
+      fail "the installed application differs from release $version: $application_directory"
+    [ -s "$application_directory/main.js" ] || fail "the installed application is incomplete: $application_directory"
+    [ -s "$application_directory/LICENSE" ] || fail "the installed application is incomplete: $application_directory"
+    [ -s "$application_directory/THIRD_PARTY_NOTICES" ] || fail "the installed application is incomplete: $application_directory"
+    return
+  fi
+
   staged_application=$(mktemp -d "$application_root/.install.XXXXXX")
   cp -R "$temporary/agemux/." "$staged_application/"
-
-  if [ -e "$application_directory" ]; then
-    previous_application="$application_root/.previous.$$"
-    mv "$application_directory" "$previous_application"
-  else
-    previous_application=
-  fi
-
-  if mv "$staged_application" "$application_directory"; then
-    staged_application=
-    [ -z "$previous_application" ] || rm -rf "$previous_application"
-  else
-    [ -z "$previous_application" ] || mv "$previous_application" "$application_directory"
-    exit 1
-  fi
+  printf '%s\n' "$expected" > "$staged_application/ARCHIVE_SHA256"
+  mv "$staged_application" "$application_directory"
+  staged_application=
 }
 
 shell_quote() {
@@ -147,7 +189,8 @@ shell_quote() {
 }
 
 install_launcher() {
-  launcher="$temporary/agemux-launcher"
+  mkdir -p "$destination"
+  staged_launcher=$(mktemp "$destination/.agemux.XXXXXX")
   {
     printf '#!/bin/sh\nexport AGEMUX_EXECUTABLE='
     shell_quote "$destination/agemux"
@@ -156,10 +199,11 @@ install_launcher() {
     printf ' '
     shell_quote "$application_directory/main.js"
     printf ' "$@"\n'
-  } > "$launcher"
+  } > "$staged_launcher"
 
-  mkdir -p "$destination"
-  install -m 0755 "$launcher" "$destination/agemux"
+  chmod 0755 "$staged_launcher"
+  mv "$staged_launcher" "$destination/agemux"
+  staged_launcher=
 }
 
 report_installation() {
@@ -175,19 +219,26 @@ report_installation() {
 cleanup() {
   rm -rf "$temporary"
   [ -z "$staged_application" ] || rm -rf "$staged_application"
+  [ -z "$staged_runtime" ] || rm -rf "$staged_runtime"
+  [ -z "$staged_launcher" ] || rm -f "$staged_launcher"
 }
 
 main() {
   require_command curl
+  require_command unzip
   select_platform
-  require_glibc_on_linux
+  require_macos_13
+  require_linux_runtime
+  require_sse42_on_x64
 
   temporary=$(mktemp -d "${TMPDIR:-/tmp}/agemux-install.XXXXXX")
   staged_application=
+  staged_runtime=
+  staged_launcher=
   trap cleanup EXIT
   trap 'exit 1' HUP INT TERM
 
-  resolve_bun
+  install_bun
   select_release
   download_release
   verify_release
