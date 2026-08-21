@@ -1,0 +1,29 @@
+#!/bin/sh
+set -eu
+
+platform=${1:?platform is required}
+version=${2:?version is required}
+output=${3:-.}
+native_package="node_modules/@opentui/core-${platform}"
+archive="agemux-${platform}.tar.gz"
+
+test -d dist
+test -d "$native_package"
+test -s LICENSE
+test -s THIRD_PARTY_NOTICES
+test "$(bun ./dist/main.js --version)" = "$version"
+
+temporary=$(mktemp -d "${TMPDIR:-/tmp}/agemux-package.XXXXXX")
+trap 'rm -rf "$temporary"' EXIT HUP INT TERM
+
+mkdir -p "$temporary/package/agemux/node_modules/@opentui" "$output"
+cp -R dist/. "$temporary/package/agemux/"
+cp -R "$native_package" "$temporary/package/agemux/node_modules/@opentui/"
+cp LICENSE THIRD_PARTY_NOTICES "$temporary/package/agemux/"
+printf '%s\n' "$version" > "$temporary/package/agemux/VERSION"
+tar -C "$temporary/package" -czf "$output/$archive" agemux
+
+tar -tzf "$output/$archive" | grep -qx 'agemux/LICENSE'
+tar -tzf "$output/$archive" | grep -qx 'agemux/THIRD_PARTY_NOTICES'
+tar -tzf "$output/$archive" | grep -qx 'agemux/VERSION'
+tar -tzf "$output/$archive" | grep -qx 'agemux/main.js'

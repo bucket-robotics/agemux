@@ -22,11 +22,13 @@ replaces itself with `claude` or `codex`.
 Give this prompt to Codex, Claude Code, or another coding agent:
 
 ```text
-Install agemux on this machine. Follow https://github.com/bucket-robotics/agemux/blob/main/SETUP.md exactly. Verify the installed binary and shell integration, then tell me what changed.
+Install agemux on this machine. Follow https://github.com/bucket-robotics/agemux/blob/main/SETUP.md exactly. Verify the installed command and shell integration, then tell me what changed.
 ```
 
-The agent needs `curl` and an existing Claude or Codex CLI. No GitHub account is
-required. Agemux supports macOS and Linux on arm64 and x64.
+The agent needs `curl`, zsh or bash, and an existing Claude or Codex CLI. The
+installer fetches a private, checksum-verified Bun runtime when needed. No
+GitHub account is required. Agemux supports macOS and glibc-based Linux on arm64
+and x64.
 
 `agemux setup` adds a small, marked block to `~/.zshrc` or `~/.bashrc`. It routes
 bare interactive commands through the picker while leaving commands with
@@ -50,7 +52,7 @@ codex() {
 }
 ```
 
-The generated block uses the installed binary's absolute path, so it works even
+The generated block uses the installed launcher's absolute path, so it works even
 before the install directory is added to `PATH`.
 
 Open a new shell and run `claude` or `codex`. On the first run:
@@ -97,17 +99,17 @@ databases are never included.
 ## Development
 
 ```sh
-git clone git@github.com:bucket-robotics/agemux.git
+git clone https://github.com/bucket-robotics/agemux.git
 cd agemux
 bun install --frozen-lockfile
 bun run check
-install -m 0755 dist/agemux ~/.local/bin/agemux
 ```
 
-`bun run check` runs the tests and typechecker, builds the standalone binary,
+`bun run check` runs the tests and typechecker, builds the release application,
 and executes its help command. Tagged builds repeat that work on every supported
-platform before GitHub Releases publishes checksummed archives.
+platform before GitHub Releases publishes immutable, checksummed archives.
 
 ## License
 
 Agemux is released under the [MIT License](LICENSE).
+Every release and installation also includes [third-party notices](THIRD_PARTY_NOTICES).

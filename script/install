@@ -3,65 +3,197 @@ set -eu
 
 repository=${AGEMUX_REPOSITORY:-bucket-robotics/agemux}
 destination=${AGEMUX_INSTALL_DIR:-"${HOME:?HOME is required}/.local/bin"}
+application_root=${AGEMUX_APPLICATION_DIR:-"${XDG_DATA_HOME:-$HOME/.local/share}/agemux"}
 tag=${AGEMUX_VERSION:-}
 
-command -v curl >/dev/null 2>&1 || {
-  echo "agemux: curl is required" >&2
+fail() {
+  echo "agemux: $1" >&2
   exit 1
 }
 
-case "$(uname -s):$(uname -m)" in
-  Darwin:arm64) platform=darwin-arm64 ;;
-  Darwin:x86_64) platform=darwin-x64 ;;
-  Linux:aarch64 | Linux:arm64) platform=linux-arm64 ;;
-  Linux:x86_64 | Linux:amd64) platform=linux-x64 ;;
-  *)
-    echo "agemux: unsupported platform: $(uname -s) $(uname -m)" >&2
-    exit 1
-    ;;
-esac
+require_command() {
+  command -v "$1" >/dev/null 2>&1 || fail "$1 is required"
+}
 
-archive="agemux-${platform}.tar.gz"
-temporary=$(mktemp -d "${TMPDIR:-/tmp}/agemux-install.XXXXXX")
-trap 'rm -rf "$temporary"' EXIT HUP INT TERM
+select_platform() {
+  case "$(uname -s):$(uname -m)" in
+    Darwin:arm64)
+      platform=darwin-arm64
+      bun_archive=bun-darwin-aarch64.zip
+      bun_directory=bun-darwin-aarch64
+      bun_checksum=d8b96221828ad6f97ac7ac0ab7e95872341af763001e8803e8267652c2652620
+      ;;
+    Darwin:x86_64)
+      platform=darwin-x64
+      bun_archive=bun-darwin-x64-baseline.zip
+      bun_directory=bun-darwin-x64-baseline
+      bun_checksum=3e35ad6f53971a9834bf9e6786e2adf72b5f1921cc9a9c5fde073d2972944076
+      ;;
+    Linux:aarch64 | Linux:arm64)
+      platform=linux-arm64
+      bun_archive=bun-linux-aarch64.zip
+      bun_directory=bun-linux-aarch64
+      bun_checksum=a27ffb63a8310375836e0d6f668ae17fa8d8d18b88c37c821c65331973a19a3b
+      ;;
+    Linux:x86_64 | Linux:amd64)
+      platform=linux-x64
+      bun_archive=bun-linux-x64-baseline.zip
+      bun_directory=bun-linux-x64-baseline
+      bun_checksum=a063908ae08b7852ca10939bbdc6ceed3ddabce8fb9402dce83d65d73b36e6c7
+      ;;
+    *) fail "unsupported platform: $(uname -s) $(uname -m)" ;;
+  esac
+}
 
-if [ -n "$tag" ]; then
-  release="https://github.com/${repository}/releases/download/${tag}"
-else
-  release="https://github.com/${repository}/releases/latest/download"
-fi
+require_glibc_on_linux() {
+  [ "$(uname -s)" = Linux ] || return 0
+  require_command ldd
+  case "$(ldd --version 2>&1 || true)" in
+    *musl*) fail "musl Linux is not supported; glibc is required" ;;
+  esac
+}
 
-download() {
+fetch() {
   curl --fail --location --silent --show-error --proto '=https' --tlsv1.2 \
-    "$release/$1" --output "$temporary/$1"
+    "$1" --output "$2"
 }
 
-download "$archive"
-download checksums.txt
-
-expected=$(awk -v file="$archive" '$2 == file { print $1 }' "$temporary/checksums.txt")
-[ -n "$expected" ] || {
-  echo "agemux: $archive is missing from checksums.txt" >&2
-  exit 1
+sha256() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1" | awk '{ print $1 }'
+  else
+    shasum -a 256 "$1" | awk '{ print $1 }'
+  fi
 }
 
-if command -v sha256sum >/dev/null 2>&1; then
-  actual=$(sha256sum "$temporary/$archive" | awk '{ print $1 }')
-else
-  actual=$(shasum -a 256 "$temporary/$archive" | awk '{ print $1 }')
-fi
-[ "$actual" = "$expected" ] || {
-  echo "agemux: checksum mismatch for $archive" >&2
-  exit 1
+verify_checksum() {
+  [ "$(sha256 "$1")" = "$2" ] || fail "checksum mismatch for $3"
 }
 
-tar -xzf "$temporary/$archive" -C "$temporary"
-mkdir -p "$destination"
-install -m 0755 "$temporary/agemux" "$destination/agemux"
+resolve_bun() {
+  if bun_executable=$(command -v bun 2>/dev/null) && [ "$("$bun_executable" --version)" = 1.3.14 ]; then
+    return
+  fi
 
-echo "agemux: installed $destination/agemux"
-case ":${PATH}:" in
-  *":${destination}:"*) ;;
-  *) echo "agemux: add $destination to PATH" ;;
-esac
-echo "agemux: run 'agemux setup' once to route bare claude and codex commands through the picker"
+  require_command unzip
+  bun_release=https://github.com/oven-sh/bun/releases/download/bun-v1.3.14
+  fetch "$bun_release/$bun_archive" "$temporary/$bun_archive"
+  verify_checksum "$temporary/$bun_archive" "$bun_checksum" "$bun_archive"
+  unzip -q "$temporary/$bun_archive" -d "$temporary/bun"
+
+  bun_runtime="$application_root/runtime/bun-1.3.14"
+  mkdir -p "$bun_runtime"
+  install -m 0755 "$temporary/bun/$bun_directory/bun" "$bun_runtime/bun"
+
+  fetch https://raw.githubusercontent.com/oven-sh/bun/bun-v1.3.14/LICENSE.md "$temporary/BUN_LICENSE.md"
+  verify_checksum "$temporary/BUN_LICENSE.md" 2c6160ec8fb853f7e8f97d9b249e756c9b0ac44860a68b6bf4f1b0bcbc5c3741 BUN_LICENSE.md
+  install -m 0644 "$temporary/BUN_LICENSE.md" "$bun_runtime/LICENSE.md"
+  bun_executable="$bun_runtime/bun"
+}
+
+select_release() {
+  if [ -n "$tag" ]; then
+    release="https://github.com/${repository}/releases/download/${tag}"
+  else
+    release="https://github.com/${repository}/releases/latest/download"
+  fi
+  archive="agemux-${platform}.tar.gz"
+}
+
+download_release() {
+  fetch "$release/$archive" "$temporary/$archive"
+  fetch "$release/checksums.txt" "$temporary/checksums.txt"
+}
+
+verify_release() {
+  expected=$(awk -v file="$archive" '$2 == file { print $1 }' "$temporary/checksums.txt")
+  [ -n "$expected" ] || fail "$archive is missing from checksums.txt"
+  verify_checksum "$temporary/$archive" "$expected" "$archive"
+  tar -xzf "$temporary/$archive" -C "$temporary"
+
+  version=$(cat "$temporary/agemux/VERSION")
+  case "$version" in
+    "" | *[!0-9A-Za-z.-]* | .* | *..*) fail "invalid release version: $version" ;;
+  esac
+  [ -z "$tag" ] || [ "$tag" = "v$version" ] || fail "archive version $version does not match $tag"
+}
+
+install_application() {
+  application_directory="$application_root/$version"
+  mkdir -p "$application_root"
+  staged_application=$(mktemp -d "$application_root/.install.XXXXXX")
+  cp -R "$temporary/agemux/." "$staged_application/"
+
+  if [ -e "$application_directory" ]; then
+    previous_application="$application_root/.previous.$$"
+    mv "$application_directory" "$previous_application"
+  else
+    previous_application=
+  fi
+
+  if mv "$staged_application" "$application_directory"; then
+    staged_application=
+    [ -z "$previous_application" ] || rm -rf "$previous_application"
+  else
+    [ -z "$previous_application" ] || mv "$previous_application" "$application_directory"
+    exit 1
+  fi
+}
+
+shell_quote() {
+  printf "'"
+  printf '%s' "$1" | sed "s/'/'\"'\"'/g"
+  printf "'"
+}
+
+install_launcher() {
+  launcher="$temporary/agemux-launcher"
+  {
+    printf '#!/bin/sh\nexport AGEMUX_EXECUTABLE='
+    shell_quote "$destination/agemux"
+    printf '\nexec '
+    shell_quote "$bun_executable"
+    printf ' '
+    shell_quote "$application_directory/main.js"
+    printf ' "$@"\n'
+  } > "$launcher"
+
+  mkdir -p "$destination"
+  install -m 0755 "$launcher" "$destination/agemux"
+}
+
+report_installation() {
+  echo "agemux: installed $destination/agemux"
+  echo "agemux: installed application and notices in $application_directory"
+  case ":${PATH}:" in
+    *":${destination}:"*) ;;
+    *) echo "agemux: add $destination to PATH" ;;
+  esac
+  echo "agemux: run 'agemux setup' once to route bare claude and codex commands through the picker"
+}
+
+cleanup() {
+  rm -rf "$temporary"
+  [ -z "$staged_application" ] || rm -rf "$staged_application"
+}
+
+main() {
+  require_command curl
+  select_platform
+  require_glibc_on_linux
+
+  temporary=$(mktemp -d "${TMPDIR:-/tmp}/agemux-install.XXXXXX")
+  staged_application=
+  trap cleanup EXIT
+  trap 'exit 1' HUP INT TERM
+
+  resolve_bun
+  select_release
+  download_release
+  verify_release
+  install_application
+  install_launcher
+  report_installation
+}
+
+main "$@"

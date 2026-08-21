@@ -4,9 +4,11 @@ These instructions are for the coding agent installing agemux. Install the
 latest release, enable shell integration, and verify both. Do not build from
 source or edit the user's shell configuration by hand.
 
-The machine must run macOS or Linux on arm64 or x64. It must already have:
+The machine must use zsh or bash and run macOS or glibc-based Linux on arm64 or
+x64. It must already have:
 
 - `curl`
+- `unzip` when Bun is not already installed
 - the Claude or Codex CLI
 
 Run this as the user who will use agemux:
@@ -28,6 +30,11 @@ sh "$agemux_setup_dir/agemux-install"
 "$HOME/.local/bin/agemux" --version
 "$HOME/.local/bin/agemux" --help >/dev/null
 "$HOME/.local/bin/agemux" setup
+
+agemux_version=$("$HOME/.local/bin/agemux" --version)
+agemux_application_dir="${XDG_DATA_HOME:-$HOME/.local/share}/agemux/$agemux_version"
+test -s "$agemux_application_dir/LICENSE"
+test -s "$agemux_application_dir/THIRD_PARTY_NOTICES"
 
 case "${SHELL##*/}" in
   zsh) agemux_shell_config="$HOME/.zshrc" ;;
