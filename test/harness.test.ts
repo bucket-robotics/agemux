@@ -48,15 +48,31 @@ describe("ClaudeHarness", () => {
     const harness = new ClaudeHarness()
     const original = setAuthenticationOverrides(harness)
     const anthropicConfig = process.env.ANTHROPIC_CONFIG_DIR
+    const provenBypasses = [
+      "ANTHROPIC_CUSTOM_HEADERS",
+      "ANTHROPIC_UNIX_SOCKET",
+      "AWS_BEARER_TOKEN_BEDROCK",
+      "AWS_ENDPOINT_URL_BEDROCK",
+      "CLAUDE_CODE_HOST_AUTH_ENV_VAR",
+      "CLAUDE_CODE_HOST_CREDS_FILE",
+      "CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST",
+    ] as const
+    const bypassEnvironment = Object.fromEntries(provenBypasses.map((key) => [key, process.env[key]]))
     process.env.ANTHROPIC_CONFIG_DIR = "/wrong/global-anthropic-config"
+    for (const key of provenBypasses) process.env[key] = "wrong-ambient-auth"
     try {
       const profile = new Profile("claude", "work", "/tmp/work")
       const environment = harness.environment(profile)
       expect(environment.CLAUDE_CONFIG_DIR).toBe(profile.directory)
       expect(environment.ANTHROPIC_CONFIG_DIR).toBe("/tmp/work/.anthropic")
+      for (const key of provenBypasses) expect(environment[key]).toBeUndefined()
       for (const key of harness.authenticationEnvironmentKeys) expect(environment[key]).toBeUndefined()
+      for (const prefix of harness.authenticationEnvironmentPrefixes) {
+        expect(Object.keys(environment).some((key) => key.startsWith(prefix))).toBeFalse()
+      }
     } finally {
       restoreEnvironment(original)
+      restoreEnvironment(bypassEnvironment)
       if (anthropicConfig === undefined) delete process.env.ANTHROPIC_CONFIG_DIR
       else process.env.ANTHROPIC_CONFIG_DIR = anthropicConfig
     }
