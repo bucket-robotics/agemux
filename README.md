@@ -38,7 +38,7 @@ arguments alone:
 ```zsh
 claude() {
   if [[ $# -eq 0 && -o interactive && -t 1 ]]; then
-    agemux claude
+    command "$HOME/.local/bin/agemux" claude
     return
   fi
   command claude "$@"
@@ -46,12 +46,15 @@ claude() {
 
 codex() {
   if [[ $# -eq 0 && -o interactive && -t 1 ]]; then
-    agemux codex
+    command "$HOME/.local/bin/agemux" codex
     return
   fi
   command codex "$@"
 }
 ```
+
+The generated block uses the installed binary's absolute path, so it works even
+before the install directory is added to `PATH`.
 
 Open a new shell and run `claude` or `codex`. On the first run:
 
