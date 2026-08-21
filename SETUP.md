@@ -6,7 +6,7 @@ source or edit the user's shell configuration by hand.
 
 The machine must run macOS or Linux on arm64 or x64. It must already have:
 
-- an authenticated GitHub CLI with access to `bucket-robotics/agemux`
+- an authenticated GitHub CLI
 - the Claude or Codex CLI
 
 Run this as the user who will use agemux:
