@@ -19,17 +19,15 @@ replaces itself with `claude` or `codex`.
 
 ## Install
 
-Agemux ships as a standalone binary for macOS and Linux on arm64 and x64. The
-repository is private for now, so installation uses an authenticated GitHub CLI.
-The Claude or Codex CLI must already be installed.
+Give this prompt to Codex, Claude Code, or another coding agent with access to
+Bucket Robotics GitHub:
 
-```sh
-installer=$(mktemp)
-gh release download --repo bucket-robotics/agemux --pattern agemux-install --output "$installer"
-sh "$installer"
-rm "$installer"
-"$HOME/.local/bin/agemux" setup
+```text
+Install agemux on this machine. Follow https://github.com/bucket-robotics/agemux/blob/main/SETUP.md exactly. Verify the installed binary and shell integration, then tell me what changed.
 ```
+
+The agent needs an authenticated GitHub CLI and an existing Claude or Codex CLI.
+Agemux supports macOS and Linux on arm64 and x64.
 
 `agemux setup` adds a small, marked block to `~/.zshrc` or `~/.bashrc`. It routes
 bare interactive commands through the picker while leaving commands with
