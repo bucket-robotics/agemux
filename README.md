@@ -25,8 +25,8 @@ Give this prompt to Codex, Claude Code, or another coding agent:
 Install agemux on this machine. Follow https://github.com/bucket-robotics/agemux/blob/main/SETUP.md exactly. Verify the installed binary and shell integration, then tell me what changed.
 ```
 
-The agent needs an authenticated GitHub CLI and an existing Claude or Codex CLI.
-Agemux supports macOS and Linux on arm64 and x64.
+The agent needs `curl` and an existing Claude or Codex CLI. No GitHub account is
+required. Agemux supports macOS and Linux on arm64 and x64.
 
 `agemux setup` adds a small, marked block to `~/.zshrc` or `~/.bashrc`. It routes
 bare interactive commands through the picker while leaving commands with
@@ -107,3 +107,7 @@ install -m 0755 dist/agemux ~/.local/bin/agemux
 `bun run check` runs the tests and typechecker, builds the standalone binary,
 and executes its help command. Tagged builds repeat that work on every supported
 platform before GitHub Releases publishes checksummed archives.
+
+## License
+
+Agemux is released under the [MIT License](LICENSE).

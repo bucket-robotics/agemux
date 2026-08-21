@@ -6,7 +6,7 @@ source or edit the user's shell configuration by hand.
 
 The machine must run macOS or Linux on arm64 or x64. It must already have:
 
-- an authenticated GitHub CLI
+- `curl`
 - the Claude or Codex CLI
 
 Run this as the user who will use agemux:
@@ -14,17 +14,15 @@ Run this as the user who will use agemux:
 ```sh
 set -eu
 
-command -v gh >/dev/null
-gh auth status
+command -v curl >/dev/null
 command -v claude >/dev/null || command -v codex >/dev/null
 
 agemux_setup_dir=$(mktemp -d)
 trap 'rm -rf "$agemux_setup_dir"' EXIT HUP INT TERM
 
-gh release download \
-  --repo bucket-robotics/agemux \
-  --pattern agemux-install \
-  --dir "$agemux_setup_dir"
+curl --fail --location --silent --show-error --proto '=https' --tlsv1.2 \
+  https://github.com/bucket-robotics/agemux/releases/latest/download/agemux-install \
+  --output "$agemux_setup_dir/agemux-install"
 
 sh "$agemux_setup_dir/agemux-install"
 "$HOME/.local/bin/agemux" --version
@@ -46,6 +44,5 @@ printf 'agemux %s installed at %s\n' \
 printf 'shell integration installed in %s\n' "$agemux_shell_config"
 ```
 
-If `gh auth status` fails, stop and ask the user to authenticate with GitHub.
 When the commands pass, tell the user to open a new shell and run `claude` or
 `codex` with no arguments.

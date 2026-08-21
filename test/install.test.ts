@@ -27,21 +27,28 @@ describe("release installer", () => {
     const checksum = new Bun.CryptoHasher("sha256").update(readFileSync(join(release, archive))).digest("hex")
     writeFileSync(join(release, "checksums.txt"), `${checksum}  ${archive}\n`)
 
-    const gh = join(fakeBin, "gh")
-    writeFileSync(gh, `#!/bin/sh
+    const curl = join(fakeBin, "curl")
+    writeFileSync(curl, `#!/bin/sh
 set -eu
-directory=
-patterns=
+output=
+url=
 while [ "$#" -gt 0 ]; do
   case "$1" in
-    --pattern) patterns="$patterns $2"; shift 2 ;;
-    --dir) directory=$2; shift 2 ;;
+    --output) output=$2; shift 2 ;;
+    http*) url=$1; shift ;;
     *) shift ;;
   esac
 done
-for pattern in $patterns; do cp "$FAKE_RELEASE/$pattern" "$directory/$pattern"; done
+printf '%s\n' "$url" >> "$CURL_LOG"
+cp "$FAKE_RELEASE/\${url##*/}" "$output"
 `)
+    chmodSync(curl, 0o755)
+
+    const gh = join(fakeBin, "gh")
+    writeFileSync(gh, "#!/bin/sh\nexit 99\n")
     chmodSync(gh, 0o755)
+
+    const curlLog = join(root, "curl.log")
 
     const result = Bun.spawnSync([join(import.meta.dir, "..", "script", "install")], {
       env: {
@@ -49,6 +56,7 @@ for pattern in $patterns; do cp "$FAKE_RELEASE/$pattern" "$directory/$pattern"; 
         PATH: `${fakeBin}:${process.env.PATH ?? ""}`,
         HOME: root,
         FAKE_RELEASE: release,
+        CURL_LOG: curlLog,
         AGEMUX_INSTALL_DIR: destination,
       },
     })
@@ -57,6 +65,10 @@ for pattern in $patterns; do cp "$FAKE_RELEASE/$pattern" "$directory/$pattern"; 
     expect(result.stdout.toString()).toContain(`installed ${join(destination, "agemux")}`)
     expect(existsSync(join(destination, "agemux"))).toBeTrue()
     expect(Bun.spawnSync([join(destination, "agemux")]).stdout.toString().trim()).toBe("installed")
+    expect(readFileSync(curlLog, "utf8").trim().split("\n")).toEqual([
+      `https://github.com/bucket-robotics/agemux/releases/latest/download/${archive}`,
+      "https://github.com/bucket-robotics/agemux/releases/latest/download/checksums.txt",
+    ])
   })
 })
 

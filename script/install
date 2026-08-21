@@ -5,8 +5,8 @@ repository=${AGEMUX_REPOSITORY:-bucket-robotics/agemux}
 destination=${AGEMUX_INSTALL_DIR:-"${HOME:?HOME is required}/.local/bin"}
 tag=${AGEMUX_VERSION:-}
 
-command -v gh >/dev/null 2>&1 || {
-  echo "agemux: GitHub CLI is required: https://cli.github.com" >&2
+command -v curl >/dev/null 2>&1 || {
+  echo "agemux: curl is required" >&2
   exit 1
 }
 
@@ -26,10 +26,18 @@ temporary=$(mktemp -d "${TMPDIR:-/tmp}/agemux-install.XXXXXX")
 trap 'rm -rf "$temporary"' EXIT HUP INT TERM
 
 if [ -n "$tag" ]; then
-  gh release download "$tag" --repo "$repository" --pattern "$archive" --pattern checksums.txt --dir "$temporary"
+  release="https://github.com/${repository}/releases/download/${tag}"
 else
-  gh release download --repo "$repository" --pattern "$archive" --pattern checksums.txt --dir "$temporary"
+  release="https://github.com/${repository}/releases/latest/download"
 fi
+
+download() {
+  curl --fail --location --silent --show-error --proto '=https' --tlsv1.2 \
+    "$release/$1" --output "$temporary/$1"
+}
+
+download "$archive"
+download checksums.txt
 
 expected=$(awk -v file="$archive" '$2 == file { print $1 }' "$temporary/checksums.txt")
 [ -n "$expected" ] || {
