@@ -1,0 +1,24 @@
+{
+  "name": "agemux",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "bun@1.3.14",
+  "bin": {
+    "agemux": "./dist/agemux"
+  },
+  "scripts": {
+    "build": "bun build --compile ./src/main.ts --outfile ./dist/agemux",
+    "check": "bun test && bun run typecheck && bun run build && ./dist/agemux --help",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@opentui/core": "0.5.4",
+    "diff": "9.0.0"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "latest"
+  }
+}

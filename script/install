@@ -1,0 +1,59 @@
+#!/bin/sh
+set -eu
+
+repository=${AGEMUX_REPOSITORY:-bucket-robotics/agemux}
+destination=${AGEMUX_INSTALL_DIR:-"${HOME:?HOME is required}/.local/bin"}
+tag=${AGEMUX_VERSION:-}
+
+command -v gh >/dev/null 2>&1 || {
+  echo "agemux: GitHub CLI is required: https://cli.github.com" >&2
+  exit 1
+}
+
+case "$(uname -s):$(uname -m)" in
+  Darwin:arm64) platform=darwin-arm64 ;;
+  Darwin:x86_64) platform=darwin-x64 ;;
+  Linux:aarch64 | Linux:arm64) platform=linux-arm64 ;;
+  Linux:x86_64 | Linux:amd64) platform=linux-x64 ;;
+  *)
+    echo "agemux: unsupported platform: $(uname -s) $(uname -m)" >&2
+    exit 1
+    ;;
+esac
+
+archive="agemux-${platform}.tar.gz"
+temporary=$(mktemp -d "${TMPDIR:-/tmp}/agemux-install.XXXXXX")
+trap 'rm -rf "$temporary"' EXIT HUP INT TERM
+
+if [ -n "$tag" ]; then
+  gh release download "$tag" --repo "$repository" --pattern "$archive" --pattern checksums.txt --dir "$temporary"
+else
+  gh release download --repo "$repository" --pattern "$archive" --pattern checksums.txt --dir "$temporary"
+fi
+
+expected=$(awk -v file="$archive" '$2 == file { print $1 }' "$temporary/checksums.txt")
+[ -n "$expected" ] || {
+  echo "agemux: $archive is missing from checksums.txt" >&2
+  exit 1
+}
+
+if command -v sha256sum >/dev/null 2>&1; then
+  actual=$(sha256sum "$temporary/$archive" | awk '{ print $1 }')
+else
+  actual=$(shasum -a 256 "$temporary/$archive" | awk '{ print $1 }')
+fi
+[ "$actual" = "$expected" ] || {
+  echo "agemux: checksum mismatch for $archive" >&2
+  exit 1
+}
+
+tar -xzf "$temporary/$archive" -C "$temporary"
+mkdir -p "$destination"
+install -m 0755 "$temporary/agemux" "$destination/agemux"
+
+echo "agemux: installed $destination/agemux"
+case ":${PATH}:" in
+  *":${destination}:"*) ;;
+  *) echo "agemux: add $destination to PATH" ;;
+esac
+echo "agemux: run 'agemux setup' once to route bare claude and codex commands through the picker"
