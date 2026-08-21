@@ -53,9 +53,19 @@ describe("ClaudeHarness", () => {
       "ANTHROPIC_UNIX_SOCKET",
       "AWS_BEARER_TOKEN_BEDROCK",
       "AWS_ENDPOINT_URL_BEDROCK",
+      "CLAUDE_BG_AUTH_SNAPSHOT_PATH",
+      "CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR",
+      "CLAUDE_CODE_CUSTOM_OAUTH_URL",
       "CLAUDE_CODE_HOST_AUTH_ENV_VAR",
       "CLAUDE_CODE_HOST_CREDS_FILE",
+      "CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR",
       "CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST",
+      "CLAUDE_CODE_SDK_HAS_HOST_AUTH_REFRESH",
+      "CLAUDE_CODE_SDK_HAS_OAUTH_REFRESH",
+      "CLAUDE_SECURESTORAGE_CONFIG_DIR",
+      "CLOUDSDK_AUTH_ACCESS_TOKEN",
+      "GCE_METADATA_HOST",
+      "METADATA_SERVER_DETECTION",
     ] as const
     const bypassEnvironment = Object.fromEntries(provenBypasses.map((key) => [key, process.env[key]]))
     process.env.ANTHROPIC_CONFIG_DIR = "/wrong/global-anthropic-config"
