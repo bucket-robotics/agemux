@@ -36,14 +36,30 @@ agemux_application_dir="${XDG_DATA_HOME:-$HOME/.local/share}/agemux/$agemux_vers
 test -s "$agemux_application_dir/LICENSE"
 test -s "$agemux_application_dir/THIRD_PARTY_NOTICES"
 
+verify_agemux_shell_config() {
+  grep -F '# >>> agemux >>>' "$1" >/dev/null
+  grep -F "$HOME/.local/bin/agemux" "$1" >/dev/null
+}
+
 case "${SHELL##*/}" in
-  zsh) agemux_shell_config="$HOME/.zshrc" ;;
-  bash) agemux_shell_config="$HOME/.bashrc" ;;
+  zsh)
+    agemux_shell_config="$HOME/.zshrc"
+    verify_agemux_shell_config "$agemux_shell_config"
+    ;;
+  bash)
+    if [ -e "$HOME/.bash_profile" ]; then
+      agemux_bash_login="$HOME/.bash_profile"
+    elif [ -e "$HOME/.bash_login" ]; then
+      agemux_bash_login="$HOME/.bash_login"
+    else
+      agemux_bash_login="$HOME/.profile"
+    fi
+    verify_agemux_shell_config "$HOME/.bashrc"
+    verify_agemux_shell_config "$agemux_bash_login"
+    agemux_shell_config="$HOME/.bashrc and $agemux_bash_login"
+    ;;
   *) echo "unsupported shell: ${SHELL:-unknown}" >&2; exit 1 ;;
 esac
-
-grep -F '# >>> agemux >>>' "$agemux_shell_config" >/dev/null
-grep -F "$HOME/.local/bin/agemux" "$agemux_shell_config" >/dev/null
 
 printf 'agemux %s installed at %s\n' \
   "$("$HOME/.local/bin/agemux" --version)" \

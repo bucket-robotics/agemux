@@ -30,23 +30,29 @@ CLI. The installer fetches a private, checksum-verified Bun runtime. No GitHub
 account is required. Agemux supports macOS 13 or newer and glibc 2.17 or newer
 Linux on arm64 and x64. x64 machines need SSE4.2.
 
-`agemux setup` adds a small, marked block to `~/.zshrc` or `~/.bashrc`. It routes
-bare interactive commands through the picker while leaving commands with
+`agemux setup` adds a small, marked block to `~/.zshrc`, or to both Bash's
+non-login and active login startup files. It clears same-name aliases, routes
+bare interactive commands through the picker, and leaves commands with
 arguments alone:
 
 ```zsh
+unalias claude 2>/dev/null || true
+unalias codex 2>/dev/null || true
+
 claude() {
-  if [[ $# -eq 0 && -o interactive && -t 1 ]]; then
-    command "$HOME/.local/bin/agemux" claude
-    return
+  if [ "$#" -eq 0 ] && [ -t 1 ]; then
+    case $- in
+      *i*) command "$HOME/.local/bin/agemux" claude; return ;;
+    esac
   fi
   command claude "$@"
 }
 
 codex() {
-  if [[ $# -eq 0 && -o interactive && -t 1 ]]; then
-    command "$HOME/.local/bin/agemux" codex
-    return
+  if [ "$#" -eq 0 ] && [ -t 1 ]; then
+    case $- in
+      *i*) command "$HOME/.local/bin/agemux" codex; return ;;
+    esac
   fi
   command codex "$@"
 }
