@@ -19,8 +19,7 @@ replaces itself with `claude` or `codex`.
 
 ## Install
 
-Give this prompt to Codex, Claude Code, or another coding agent with access to
-Bucket Robotics GitHub:
+Give this prompt to Codex, Claude Code, or another coding agent:
 
 ```text
 Install agemux on this machine. Follow https://github.com/bucket-robotics/agemux/blob/main/SETUP.md exactly. Verify the installed binary and shell integration, then tell me what changed.
